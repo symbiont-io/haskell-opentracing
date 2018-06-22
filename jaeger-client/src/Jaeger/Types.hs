@@ -56,4 +56,4 @@ data SpanContext = SpanContext
   { sctxTraceId :: !Int64
   , sctxSpanId  :: !Int64
   }
-  deriving (Eq, Show, Generic, Serialise)
+  deriving (Eq, Show, Ord, Generic, Serialise)

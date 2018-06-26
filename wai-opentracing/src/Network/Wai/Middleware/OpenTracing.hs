@@ -10,6 +10,8 @@ import qualified Data.Text                 as T
 import           Data.Text.Encoding        (decodeUtf8, encodeUtf8)
 import qualified Data.Text.Lazy            as LT
 import           Data.Text.Read
+import           Data.UUID                 (toWords)
+import           Data.UUID.V4              (nextRandom)
 import           Jaeger
 import           Network.HTTP.Types.Header
 import           Network.Wai
@@ -25,8 +27,11 @@ import           Network.Wai
 -- In all cases this middleware will also /set/ the @uber-tracing-id@ header to the new span's
 -- identifier so that downstream spans can be correctly linked to the whole request.
 openTracingMiddleware :: Tracer -> Middleware
-openTracingMiddleware tracer@(Tracer {tracerActiveSpan}) app = \req onResponse ->
-  let parentIdM = extract tracer $ requestHeaders req in
+openTracingMiddleware tracer@(Tracer {tracerActiveSpan}) app = \req onResponse -> do
+  let parentIdM = extract tracer $ requestHeaders req
+  parentId <- case parentIdM of
+                Just parentId -> pure $ sctxTraceId parentId
+                Nothing       -> ext <$> toWords <$> nextRandom
   inSpan tracer (T.intercalate "/" (pathInfo req)) (sctxTraceId <$> parentIdM) $ do
     maybe (pure ()) (activeSpanIsAChildOf tracer) parentIdM
     activeSpanM <- readActiveSpan tracer
@@ -34,3 +39,6 @@ openTracingMiddleware tracer@(Tracer {tracerActiveSpan}) app = \req onResponse -
       Nothing -> app req onResponse
       Just activeSpan ->
         app req {requestHeaders = inject tracer activeSpan (requestHeaders req)} onResponse
+
+  where
+    ext (a, b, _, _) = fromInteger $ toInteger a + toInteger b

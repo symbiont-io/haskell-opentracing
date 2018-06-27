@@ -117,28 +117,20 @@ popSpan tracer =
 
 
 pushSpan :: Tracer -> Text -> Maybe TraceId -> IO ()
-pushSpan tracer@Tracer{tracerIdGenerator}  spanOperationName  traceIdM =
-  do
-    spanOpenedAt <-
-      getPOSIXTime
+pushSpan tracer@Tracer{tracerIdGenerator}  spanOperationName  traceIdM = do
+  spanOpenedAt      <- getPOSIXTime
+  spanMonotonicTime <- getTime Monotonic
+  spanId            <- tracerIdGenerator
+  spanParent        <- readActiveSpan tracer
 
-    spanMonotonicTime <-
-      getTime Monotonic
+  spanTraceId <- case traceIdM of
+      Just traceId ->
+        pure traceId
 
-    spanId <-
-      tracerIdGenerator
+      Nothing ->
+        maybe tracerIdGenerator pure (fmap spanTraceId spanParent)
 
-    spanParent <-
-      readActiveSpan tracer
-
-    spanTraceId <-
-      case traceIdM of
-        Just traceId -> pure traceId
-        Nothing ->
-          maybe tracerIdGenerator pure (fmap spanTraceId spanParent)
-
-    let
-      newSpan =
+  let newSpan =
         Span { spanDuration = Nothing
              , spanTags = mempty
              , spanReferences = []
@@ -146,7 +138,7 @@ pushSpan tracer@Tracer{tracerIdGenerator}  spanOperationName  traceIdM =
              , ..
              }
 
-    writeActiveSpan tracer newSpan
+  writeActiveSpan tracer newSpan
 
 
 clearActiveSpan :: Tracer -> IO ()
@@ -170,7 +162,6 @@ tagActiveSpan Tracer{tracerActiveSpan} k v =
   modifyIORef tracerActiveSpan $ \s ->
     flip fmap s $ \sp ->
       sp { spanTags = Map.insert k v (spanTags sp) }
-
 
 reportSpan :: Tracer -> Span -> IO ()
 reportSpan tracer span =
@@ -301,8 +292,6 @@ toMicroSeconds :: TimeSpec -> Int64
 toMicroSeconds ts =
   round (fromIntegral (toNanoSecs ts) / (1000 :: Double))
 
-
-
 activeSpanFollowsFrom :: Tracer -> SpanContext -> IO ()
 activeSpanFollowsFrom Tracer{tracerActiveSpan} ctx =
   modifyIORef tracerActiveSpan $
@@ -320,3 +309,14 @@ setActiveSpanBaggage Tracer{tracerActiveSpan} k v =
   modifyIORef tracerActiveSpan $
   fmap $ \sp ->
     sp { spanBaggage = Map.insert k v (spanBaggage sp) }
+
+setParentSpan :: Tracer -> SpanContext -> IO ()
+setParentSpan tracer SpanContext{..} = do
+  activeSpanM <- readActiveSpan tracer
+  case activeSpanM of
+    Nothing -> pure ()
+    Just activeSpan ->
+      writeActiveSpan tracer $ activeSpan{spanParent = Just $ activeSpan{spanTraceId = sctxTraceId,
+                                                                         spanId      = sctxSpanId
+                                                                        }
+                                         }

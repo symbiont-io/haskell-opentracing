@@ -3,6 +3,8 @@
 
 module Network.Wai.Middleware.OpenTracing where
 
+import           Crypto.Number.Serialize   (os2ip)
+import           Crypto.Random.Entropy     (getEntropy)
 import           Data.ByteString           (ByteString)
 import           Data.IORef
 import           Data.List                 (find)
@@ -10,8 +12,6 @@ import qualified Data.Text                 as T
 import           Data.Text.Encoding        (decodeUtf8, encodeUtf8)
 import qualified Data.Text.Lazy            as LT
 import           Data.Text.Read
-import           Data.UUID                 (toWords)
-import           Data.UUID.V4              (nextRandom)
 import           Jaeger
 import           Network.HTTP.Types.Header
 import           Network.Wai
@@ -31,7 +31,7 @@ openTracingMiddleware tracer@(Tracer {tracerActiveSpan}) app = \req onResponse -
   let parentIdM = extract tracer $ requestHeaders req
   parentId <- case parentIdM of
                 Just parentId -> pure $ sctxTraceId parentId
-                Nothing       -> ext <$> toWords <$> nextRandom
+                Nothing       -> fromInteger . os2ip <$> (getEntropy bits64 :: IO ByteString)
   inSpan tracer (T.intercalate "/" (pathInfo req)) (sctxTraceId <$> parentIdM) $ do
     maybe (pure ()) (activeSpanIsAChildOf tracer) parentIdM
     activeSpanM <- readActiveSpan tracer
@@ -41,4 +41,4 @@ openTracingMiddleware tracer@(Tracer {tracerActiveSpan}) app = \req onResponse -
         app req {requestHeaders = inject tracer activeSpan (requestHeaders req)} onResponse
 
   where
-    ext (a, b, _, _) = fromInteger $ toInteger a + toInteger b
+    bits64 = 4

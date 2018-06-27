@@ -16,3 +16,4 @@ packages:
 extra-deps:
   - serialise-0.2.0.0
   - cborg-0.2.0.0
+  - cryptonite-0.24

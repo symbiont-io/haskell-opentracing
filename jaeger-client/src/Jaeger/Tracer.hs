@@ -328,31 +328,22 @@ setParentSpan tracer SpanContext{..} = do
                                                                          spanId      = sctxSpanId
                                                                         }
                                          }
-recreateTraceWithRoot :: Tracer -> SpanContext -> IO ()
-recreateTraceWithRoot tracer SpanContext{..} = do
+recreateTraceWithRoot :: Tracer -> IO ()
+recreateTraceWithRoot tracer = do
   spM <- readActiveSpan tracer
   case spM of
     Nothing -> pure ()
     Just sp -> do
-      let (parent, rest) = extractSpans sp []
-          uberParent = parent{spanId = sctxSpanId,
-                              spanTraceId = sctxTraceId,
-                              spanOperationName = "I'm the father of all there is"
-                             }
-
+      let spans = extractSpans sp []
       tid <- tracerIdGenerator tracer
-      writeActiveSpan tracer $ createSpan (parent : rest) tid
+      writeActiveSpan tracer $ createSpan spans tid
 
   where
     extractSpans sp acc =
       case spanParent sp of
-        Nothing ->
-          let rev = reverse $ sp : acc in
-          if null rev
-            then (sp{spanParent = Nothing}, [])
-            else
-              let (parent:rest) = rev
-              in (parent, rest)
+        Nothing  ->
+          reverse $ sp : acc
+
         Just sp' ->
           extractSpans sp' $ sp : acc
 

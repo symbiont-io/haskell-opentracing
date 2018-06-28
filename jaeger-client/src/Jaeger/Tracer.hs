@@ -117,11 +117,19 @@ popSpan tracer =
 
 
 pushSpan :: Tracer -> Text -> Maybe TraceId -> IO ()
-pushSpan tracer@Tracer{tracerIdGenerator}  spanOperationName  traceIdM = do
+pushSpan = pushSpanGen False
+
+pushSpanNoParent :: Tracer -> Text -> Maybe TraceId -> IO ()
+pushSpanNoParent = pushSpanGen True
+
+pushSpanGen :: Bool -> Tracer -> Text -> Maybe TraceId -> IO ()
+pushSpanGen noParent tracer@Tracer{tracerIdGenerator} spanOperationName traceIdM = do
   spanOpenedAt      <- getPOSIXTime
   spanMonotonicTime <- getTime Monotonic
   spanId            <- tracerIdGenerator
-  spanParent        <- readActiveSpan tracer
+  spanParent        <- if noParent
+                        then pure Nothing
+                        else readActiveSpan tracer
 
   spanTraceId <- case traceIdM of
       Just traceId ->
@@ -320,3 +328,34 @@ setParentSpan tracer SpanContext{..} = do
                                                                          spanId      = sctxSpanId
                                                                         }
                                          }
+recreateTraceWithRoot :: Tracer -> SpanContext -> IO ()
+recreateTraceWithRoot tracer SpanContext{..} = do
+  spM <- readActiveSpan tracer
+  case spM of
+    Nothing -> pure ()
+    Just sp -> do
+      let (parent, rest) = extractSpans sp []
+          uberParent = parent{spanId = sctxSpanId,
+                              spanTraceId = sctxTraceId,
+                              spanOperationName = "I'm the father of all there is"
+                             }
+
+      tid <- tracerIdGenerator tracer
+      writeActiveSpan tracer $ createSpan (parent : rest) tid
+
+  where
+    extractSpans sp acc =
+      case spanParent sp of
+        Nothing ->
+          let rev = reverse $ sp : acc in
+          if null rev
+            then (sp{spanParent = Nothing}, [])
+            else
+              let (parent:rest) = rev
+              in (parent, rest)
+        Just sp' ->
+          extractSpans sp' $ sp : acc
+
+    createSpan []       _ = error "createSpan []"
+    createSpan (sp:[])  tid = sp{spanParent = Nothing, spanTraceId = tid}
+    createSpan (sp:sps) tid = sp{spanParent = Just $ createSpan sps tid, spanTraceId = tid}

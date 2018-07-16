@@ -41,8 +41,6 @@ data Tracer = Tracer
   , tracerIdGenerator   :: !(IO Int64)
   }
 
-
-
 instance Thrift.Transport Tracer where
   tFlush t =
     do
@@ -63,7 +61,6 @@ data TracerConfiguration = TracerConfiguration
   , tracerServiceName :: !Text
   }
 
-
 openTracer :: TracerConfiguration -> IO Tracer
 openTracer tracerConfiguration@TracerConfiguration{tracerHostName, tracerPort} =
   do
@@ -72,6 +69,7 @@ openTracer tracerConfiguration@TracerConfiguration{tracerHostName, tracerPort} =
         (Just defaultHints { addrSocketType = Datagram })
         (Just tracerHostName)
         (Just tracerPort)
+          `catch` \ (e :: IOException) -> error $ show e
 
     tracerSocket <-
       socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr)

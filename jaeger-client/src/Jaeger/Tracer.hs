@@ -17,7 +17,6 @@ import           Data.Int
 import           Data.IORef
 import qualified Data.Map.Strict                as Map
 import           Data.Maybe
-import           Data.Monoid
 import           Data.Text                      (Text)
 import qualified Data.Text.Lazy                 as LT
 import           Data.Time.Clock.POSIX
@@ -70,9 +69,7 @@ openTracer tracerConfiguration@TracerConfiguration{tracerHostName, tracerPort} =
         (Just defaultHints { addrSocketType = Datagram })
         (Just tracerHostName)
         (Just tracerPort)
-          `catch` \ (e :: IOException) ->
-                      let addr = show tracerHostName <> ":" <> show tracerPort in
-                      error $ show e <> "\n" <> addr
+          `catch` \ (e :: IOException) -> error $ show e
 
     tracerSocket <-
       socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr)

@@ -1,19 +1,15 @@
-resolver: lts-10.0
+resolver: lts-12.22
 
 packages:
 - jaeger-client
-- test-lib
-- test-exe
-- opentracing-client
 - wai-opentracing
 - location:
-    git: https://github.com/apache/thrift/
-    commit: 0293c3643b0075b510b9d92b2cc39b6d5e0fadb8
+    git: https://github.com/symbiont-io/thrift.git
+    commit: 3c21b48f4e89f7a4ef340741b70013bff2bf6679
+    subdirs:
+      - lib/hs
   extra-dep: true
-  subdirs:
-    - lib/hs
 
 extra-deps:
   - serialise-0.2.0.0
-  - cborg-0.2.0.0
   - cryptonite-0.24
